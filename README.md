@@ -53,6 +53,9 @@ docker compose up --build
 | POST | `/jobs` | 提交生成+验证作业（后台执行），返回 `job_id` |
 | GET | `/jobs/{job_id}` | 状态、无解冲突报告、逐步日志 |
 | GET | `/jobs/{job_id}/download` | 仅在验证成功后下载 zip（含 5 个文件） |
+| POST | `/merges` | 合装两个成功作业的样本（后台执行），返回 `merge_id` |
+| GET | `/merges/{merge_id}` | 合装状态、冲突报告（无解/超时/试装失败分别报告）、日志 |
+| GET | `/merges/{merge_id}/download` | 仅在合装验证成功后下载合并 zip（含 5 个文件） |
 
 ### 请求体
 
@@ -98,6 +101,43 @@ psql "$EMPTY_DATABASE_DSN" -v ON_ERROR_STOP=1 \
   -f 01_schema.sql -f 02_data.sql -f 03_constraints.sql
 ```
 
+## 合装（co-load）：把两份独立样本装在一起
+
+汇总回归经常需要把两份独立生成的样本装入同一个空库——即使检验单编号
+撞号，两份记录也必须分别保留。`POST /merges` 输入两个**已成功**作业号，
+产出一份合并 SQL 包：
+
+```json
+{"job_a": "<第一个作业号>", "job_b": "<第二个作业号>"}
+```
+
+**资格限制**（不满足时以 `unsupported` / `structure_mismatch` 明确拒绝）：
+
+- 两份作业结构完全相同（同 schema、同表集合、同表结构定义）；
+- 所有外键均指向主键（不允许指向普通唯一键）；
+- 每份作业至多 2 张表、每表最多 8 行；
+- 两个作业号必须不同（合装要求两份独立生成的样本）。
+
+**合并规则**：
+
+- 第一份样本（`job_a`）的全部值原样保留；
+- 第二份样本（`job_b`）只允许在整数列类型边界内改写**主键列**和构成
+  **有效引用**（完整非 NULL 键）的**外键列**，其余单元格值不变；
+- NULL 位置不变：原为 NULL 的单元格仍为 NULL，非 NULL 的仍为非 NULL；
+- 每条有效引用仍指向原来那条记录的合并版（含复合键、自引用与循环引用）；
+- 合并后主键/唯一键/外键/NOT NULL 全部约束必须同时成立。
+
+**结果**：合并包与生成包同为 5 个文件；`manifest.json` 记录
+`source_jobs`（两个来源作业号）、`row_counts`（各表合并行数）与
+`row_counts_by_source`（各表分来源行数）。合并包同样要在隔离空库
+**试装成功后才返回**；`no_solution`（无解）、`solver_timeout`（超时）、
+`verification`（试装失败）分别报告，不返回部分包，也不修改两个来源包。
+
+`/docs` 演示流程：用 `examples/request_mergeable_dept_employee.json`
+（dept+employee 两表、外键均指向主键、含跨表循环与自引用、每表 ≤8 行）
+提交两次 `POST /jobs`，待两个作业 `SUCCEEDED` 后 `POST /merges`，
+轮询 `GET /merges/{merge_id}` 至 `SUCCEEDED` 后下载合并包。
+
 ## 循环引用检验表示例
 
 `sql/00_demo_source_schema.sql` 构成如下循环图（全部整数列、零行）：
@@ -112,7 +152,8 @@ assignment(emp_id,project_id) → employee / project              复合主键+�
 
 对应请求见 `examples/request_cyclic_four_tables.json`；无解示例见
 `examples/request_unsat_conflict.json`；闭包扩展示例见
-`examples/request_closure_single.json`。
+`examples/request_closure_single.json`；可合装示例见
+`examples/request_mergeable_dept_employee.json`。
 
 ## 本地自测（无需 Docker）
 
@@ -136,9 +177,9 @@ PYTHONPATH=. .venv/bin/python -m pytest tests/
 ## 目录结构
 
 ```
-app/            FastAPI + 内省 + z3 求解 + SQL 渲染 + 隔离库验证
+app/            FastAPI + 内省 + z3 求解/合装 + SQL 渲染 + 隔离库验证
 sql/            循环引用检验表源结构、源库初始化（只读角色）
-examples/       循环四表、无解冲突、闭包扩展三类请求示例
-tests/          34 个单元/集成/端到端测试（真实 PostgreSQL）
+examples/       循环四表、无解冲突、闭包扩展、可合装四类请求示例
+tests/          61 个单元/集成/端到端测试（真实 PostgreSQL）
 docker-compose.yml / Dockerfile / requirements.txt
 ```

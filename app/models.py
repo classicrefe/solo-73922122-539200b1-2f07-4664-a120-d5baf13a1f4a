@@ -128,6 +128,19 @@ class GenerateRequest(BaseModel):
         return [t.table for t in self.tables]
 
 
+class MergeRequest(BaseModel):
+    """Co-load request: merge the verified samples of two succeeded jobs."""
+
+    job_a: str = Field(
+        min_length=1,
+        description="第一份样本的来源作业号：其全部值在合装后原样保留",
+    )
+    job_b: str = Field(
+        min_length=1,
+        description="第二份样本的来源作业号：仅主键与有效引用外键列可在整数类型边界内改写",
+    )
+
+
 class Rejection(BaseModel):
     object: str
     reason: str
@@ -154,3 +167,17 @@ class JobResult(BaseModel):
     conflict: ConflictReport | None = None
     log: list[str] = Field(default_factory=list)
     selected_tables: list[str] = Field(default_factory=list)
+
+
+class MergeResult(BaseModel):
+    """Status of a co-load (merge) job combining two succeeded jobs' samples."""
+
+    merge_id: str
+    status: JobStatus
+    created_at: str
+    job_a: str
+    job_b: str
+    conflict: ConflictReport | None = None
+    log: list[str] = Field(default_factory=list)
+    selected_tables: list[str] = Field(default_factory=list)
+    row_counts: dict[str, int] = Field(default_factory=dict)

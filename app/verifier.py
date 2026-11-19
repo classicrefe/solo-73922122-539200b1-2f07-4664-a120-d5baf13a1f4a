@@ -29,6 +29,15 @@ def _sentinel(col, offset: int) -> int:
     return low + 1 + offset
 
 
+def probe_sentinel_value(col, offset: int) -> int:
+    """Public accessor for the negative-probe sentinel of a column.
+
+    The merge solver keeps these values out of rewritten keys so that a
+    dangling-reference probe can never accidentally hit a real merged key.
+    """
+    return _sentinel(col, offset)
+
+
 def _execute_script(conn, script: str, log: list[str]) -> None:
     with conn.cursor() as cur:
         cur.execute(script)

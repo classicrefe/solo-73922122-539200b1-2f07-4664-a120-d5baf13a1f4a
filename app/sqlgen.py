@@ -111,6 +111,28 @@ def render_constraints(tables: dict[str, TableSchema], selected: list[str]) -> s
     return "\n".join(lines)
 
 
+def _constraints_inventory(selected: list[str], tables: dict[str, TableSchema]) -> dict:
+    return {
+        t: {
+            "primary_key": (
+                [u.name for u in tables[t].unique_constraints if u.is_primary] or None
+            ),
+            "unique": [u.name for u in tables[t].unique_constraints if not u.is_primary],
+            "foreign_keys": [
+                {
+                    "name": f.name,
+                    "columns": f.columns,
+                    "references": f"{f.ref_table}({', '.join(f.ref_columns)})",
+                    "match": f.match.value,
+                    "deferrable": not f.not_deferrable,
+                }
+                for f in tables[t].foreign_keys
+            ],
+        }
+        for t in selected
+    }
+
+
 def render_manifest(
     selected: list[str],
     tables: dict[str, TableSchema],
@@ -126,25 +148,7 @@ def render_manifest(
             t: {c: {"low": r.low, "high": r.high} for c, r in specs[t].ranges.items()}
             for t in selected
         },
-        "constraints": {
-            t: {
-                "primary_key": (
-                    [u.name for u in tables[t].unique_constraints if u.is_primary] or None
-                ),
-                "unique": [u.name for u in tables[t].unique_constraints if not u.is_primary],
-                "foreign_keys": [
-                    {
-                        "name": f.name,
-                        "columns": f.columns,
-                        "references": f"{f.ref_table}({', '.join(f.ref_columns)})",
-                        "match": f.match.value,
-                        "deferrable": not f.not_deferrable,
-                    }
-                    for f in tables[t].foreign_keys
-                ],
-            }
-            for t in selected
-        },
+        "constraints": _constraints_inventory(selected, tables),
     }
 
 
@@ -193,4 +197,102 @@ def build_package(
         "03_constraints.sql": render_constraints(tables, selected),
         "manifest.json": json.dumps(manifest, ensure_ascii=False, indent=2),
         "README.md": render_readme(manifest),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Co-load (merge) package: two verified samples combined into one loadable set.
+# ---------------------------------------------------------------------------
+
+
+def render_merge_manifest(
+    selected: list[str],
+    tables: dict[str, TableSchema],
+    data: dict[str, list[Row]],
+    job_a: str,
+    job_b: str,
+    counts_a: dict[str, int],
+    counts_b: dict[str, int],
+) -> dict:
+    return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "contains_real_patient_data": False,
+        "package_kind": "coload_merge",
+        "source_jobs": {"first": job_a, "second": job_b},
+        "merge_rules": {
+            "first_sample": "全部值原样保留",
+            "second_sample": (
+                "仅主键列与构成有效引用（完整非 NULL 键）的外键列可在整数列类型"
+                "边界内改写；NULL 位置不变；每条有效引用仍指向原记录的合并版"
+            ),
+        },
+        "selected_tables": selected,
+        "row_counts": {t: len(data[t]) for t in selected},
+        "row_counts_by_source": {
+            t: {"first": counts_a[t], "second": counts_b[t]} for t in selected
+        },
+        "constraints": _constraints_inventory(selected, tables),
+    }
+
+
+def render_merge_readme(manifest: dict) -> str:
+    lines = [
+        "# Merged co-load sample package",
+        "",
+        "Generated: " + manifest["generated_at_utc"],
+        "Contains real patient data: **no** — all values are solver-generated integers.",
+        "",
+        "## Source jobs",
+        "",
+        f"* first (kept verbatim): `{manifest['source_jobs']['first']}`",
+        f"* second (only PK / validly-referencing FK cells rewritten within "
+        f"integer type bounds, NULL positions preserved): "
+        f"`{manifest['source_jobs']['second']}`",
+        "",
+        "## Files",
+        "",
+        "| file | purpose |",
+        "|---|---|",
+        "| 01_schema.sql | CREATE TABLE with inline PK/UNIQUE (no FK yet) |",
+        "| 02_data.sql | INSERT of both samples (first sample rows, then merged second-sample rows) |",
+        "| 03_constraints.sql | ALTER TABLE ADD CONSTRAINT for every FK (handles cycles) |",
+        "| manifest.json | source jobs, per-table row counts and constraint inventory |",
+        "",
+        "## Load",
+        "",
+        "```sh",
+        "psql \"$EMPTY_DATABASE_DSN\" -v ON_ERROR_STOP=1 -f 01_schema.sql \\",
+        "  -f 02_data.sql -f 03_constraints.sql",
+        "```",
+        "",
+        "## Row counts (merged totals)",
+        "",
+    ]
+    for t, n in manifest["row_counts"].items():
+        src = manifest["row_counts_by_source"][t]
+        lines.append(
+            f"* `{t}`: {n} row(s) = {src['first']} (first) + {src['second']} (second)"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_merge_package(
+    tables: dict[str, TableSchema],
+    selected: list[str],
+    data: dict[str, list[Row]],
+    job_a: str,
+    job_b: str,
+    counts_a: dict[str, int],
+    counts_b: dict[str, int],
+) -> dict[str, str]:
+    manifest = render_merge_manifest(
+        selected, tables, data, job_a, job_b, counts_a, counts_b
+    )
+    return {
+        "01_schema.sql": render_schema(tables, selected),
+        "02_data.sql": render_data(tables, selected, data),
+        "03_constraints.sql": render_constraints(tables, selected),
+        "manifest.json": json.dumps(manifest, ensure_ascii=False, indent=2),
+        "README.md": render_merge_readme(manifest),
     }

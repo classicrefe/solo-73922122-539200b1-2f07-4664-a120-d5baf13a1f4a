@@ -16,6 +16,7 @@ row count, range or constraint that participates in the conflict.
 """
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 
 import z3
@@ -29,6 +30,11 @@ from .models import (
 
 NULL_MARKER = None
 Row = dict[str, int | None]
+
+#: z3 contexts are not thread-safe: concurrent jobs (each running in its own
+#: thread-pool worker) must never drive z3 at the same time. All solving is
+#: therefore serialized process-wide; verification I/O stays concurrent.
+Z3_LOCK = threading.RLock()
 
 
 @dataclass
@@ -246,6 +252,11 @@ class Generator:
 
     # ------------------------------------------------------------------ solve
     def solve(self) -> dict[str, list[Row]]:
+        # z3 is not thread-safe: serialize the whole solve across the process.
+        with Z3_LOCK:
+            return self._solve_locked()
+
+    def _solve_locked(self) -> dict[str, list[Row]]:
         self._build_cells()
         labelled = self._hard_constraints()
 

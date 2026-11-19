@@ -1,0 +1,26 @@
+{
+  "_comment": "可合装样本：dept+employee 两表（外键均指向主键，含跨表循环 dept.mgr_emp→employee / employee.dept_id→dept 与自引用），每表 ≤8 行，满足合装资格。窄区间让两次独立生成的编号大概率撞号，便于演示第二份样本主键/外键改写。用该请求提交两次作业（均成功后）即可 POST /merges 合装。",
+  "schema_name": "public",
+  "tables": [
+    {
+      "table": "dept",
+      "rows": 3,
+      "ranges": {
+        "dept_id":     {"low": 100,  "high": 104},
+        "dept_code":   {"low": 1,    "high": 3},
+        "parent_dept": {"low": 100,  "high": 104},
+        "mgr_emp":     {"low": 1000, "high": 1004}
+      }
+    },
+    {
+      "table": "employee",
+      "rows": 4,
+      "ranges": {
+        "emp_id":    {"low": 1000, "high": 1004},
+        "dept_id":   {"low": 100,  "high": 104},
+        "mentor_id": {"low": 1000, "high": 1004},
+        "level":     {"low": 1,    "high": 3}
+      }
+    }
+  ]
+}

@@ -25,6 +25,10 @@ class Settings:
     )
     max_tables: int = _int("MAX_TABLES", 4)
     max_rows_per_table: int = _int("MAX_ROWS_PER_TABLE", 20)
+    # Co-load (merge) limits: each source sample may span at most this many
+    # tables, and each table may contribute at most this many rows per sample.
+    merge_max_tables: int = _int("MERGE_MAX_TABLES", 2)
+    merge_max_rows_per_table: int = _int("MERGE_MAX_ROWS_PER_TABLE", 8)
     job_ttl_seconds: int = _int("JOB_TTL_SECONDS", 3600)
     verify_db_prefix: str = os.environ.get("VERIFY_DB_PREFIX", "sample_verify_")
     # "drop"   : standard behaviour, DROP DATABASE after each job (default).

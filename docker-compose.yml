@@ -54,6 +54,9 @@ services:
       VERIFY_CLEANUP: "drop"
       MAX_TABLES: "4"
       MAX_ROWS_PER_TABLE: "20"
+      # Co-load (merge) limits: at most 2 tables and 8 rows per table per sample.
+      MERGE_MAX_TABLES: "2"
+      MERGE_MAX_ROWS_PER_TABLE: "8"
     ports:
       - "8000:8000"
 
