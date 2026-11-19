@@ -1,0 +1,62 @@
+name: synthetic-sample-service
+
+services:
+  # Source database: holds only the demo structure (zero data rows).
+  # The API connects as app_ro which cannot read rows nor write anything.
+  source-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app_pwd
+    volumes:
+      - ./sql:/sql:ro
+      - ./sql/01_source_init.sql:/docker-entrypoint-initdb.d/01_source_init.sql:ro
+      - source_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "55432:5432"
+
+  # Verification cluster: isolated empty databases are created/dropped here
+  # for every job. Never reused as a source.
+  verify-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: verifier
+      POSTGRES_PASSWORD: verifier_pwd
+    volumes:
+      - verify_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verifier -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "55433:5432"
+
+  api:
+    build: .
+    depends_on:
+      source-db:
+        condition: service_healthy
+      verify-db:
+        condition: service_healthy
+    environment:
+      SOURCE_DSN: postgresql://app_ro:app_ro_pwd@source-db:5432/appdb
+      VERIFY_DSN: postgresql://verifier:verifier_pwd@verify-db:5432/postgres
+      # Standard postgres image supports DROP DATABASE; use "detach" only on
+      # sandboxed kernels that deny the checkpoint signal.
+      VERIFY_CLEANUP: "drop"
+      MAX_TABLES: "4"
+      MAX_ROWS_PER_TABLE: "20"
+    ports:
+      - "8000:8000"
+
+volumes:
+  source_pgdata:
+  verify_pgdata:

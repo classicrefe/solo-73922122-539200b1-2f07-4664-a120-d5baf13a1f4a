@@ -1,0 +1,16 @@
+{
+  "_comment": "小样本：仅选 project；其 MATCH FULL 复合外键目标 dept 被自动纳入，dept 又经 mgr_emp 引用 employee，传递闭包共 3 张表（未超 4 张上限）。闭包自动纳入的表按类型边界取默认区间、默认 5 行。",
+  "schema_name": "public",
+  "tables": [
+    {
+      "table": "project",
+      "rows": 3,
+      "ranges": {
+        "project_id": {"low": 9000, "high": 9999},
+        "dept_id":    {"low": 100,  "high": 199},
+        "dept_code":  {"low": 1,    "high": 9},
+        "budget":     {"low": 0,    "high": 100000}
+      }
+    }
+  ]
+}

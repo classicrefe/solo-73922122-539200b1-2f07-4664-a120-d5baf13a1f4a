@@ -1,0 +1,44 @@
+{
+  "schema_name": "public",
+  "tables": [
+    {
+      "table": "dept",
+      "rows": 3,
+      "ranges": {
+        "dept_id":       {"low": 100, "high": 199},
+        "dept_code":     {"low": 1,   "high": 9},
+        "parent_dept":   {"low": 100, "high": 199},
+        "mgr_emp":       {"low": 1000, "high": 1999}
+      }
+    },
+    {
+      "table": "employee",
+      "rows": 5,
+      "ranges": {
+        "emp_id":    {"low": 1000, "high": 1999},
+        "dept_id":   {"low": 100,  "high": 199},
+        "mentor_id": {"low": 1000, "high": 1999},
+        "level":     {"low": 1,    "high": 5}
+      }
+    },
+    {
+      "table": "project",
+      "rows": 4,
+      "ranges": {
+        "project_id": {"low": 9000, "high": 9999},
+        "dept_id":    {"low": 100,  "high": 199},
+        "dept_code":  {"low": 1,    "high": 9},
+        "budget":     {"low": 0,    "high": 100000}
+      }
+    },
+    {
+      "table": "assignment",
+      "rows": 6,
+      "ranges": {
+        "emp_id":     {"low": 1000, "high": 1999},
+        "project_id": {"low": 9000, "high": 9999},
+        "role_code":  {"low": 10,   "high": 99}
+      }
+    }
+  ]
+}

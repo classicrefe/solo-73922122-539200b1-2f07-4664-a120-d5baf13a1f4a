@@ -1,0 +1,26 @@
+{
+  "_comment": "无解示例：employee 需要 5 个互不相同的 emp_id（主键），但区间只有 [1000,1003] 四个整数；同时 dept_id 区间 [500,599] 与 dept.dept_id 的区间 [100,199] 不可能有交集，外键必失败。",
+  "schema_name": "public",
+  "tables": [
+    {
+      "table": "employee",
+      "rows": 5,
+      "ranges": {
+        "emp_id":    {"low": 1000, "high": 1003},
+        "dept_id":   {"low": 500,  "high": 599},
+        "mentor_id": {"low": 1000, "high": 1999},
+        "level":     {"low": 1,    "high": 5}
+      }
+    },
+    {
+      "table": "dept",
+      "rows": 2,
+      "ranges": {
+        "dept_id":     {"low": 100, "high": 199},
+        "dept_code":   {"low": 1,   "high": 9},
+        "parent_dept": {"low": 100, "high": 199},
+        "mgr_emp":     {"low": 1000, "high": 1999}
+      }
+    }
+  ]
+}
